@@ -207,24 +207,13 @@ async def archive(ctx, message_id: int = None):
     )
     await ctx.send(f"💾 Message archivé avec succès : {target_message.content[:50]}...\nLien : {url}")
 
-
-# Vue avec boutons pour voter sur l'identité de l'auteur (optionnel)
-class VoteView(View):
-    def __init__(self, message_id, choices):
-        super().__init__()
-        self.message_id = message_id
-        for name in choices:
-            self.add_item(Button(label=name, style=discord.ButtonStyle.primary))
-
 @bot.command()
 async def show_message(ctx, message_id: int):
     """Affiche anonymement un message archivé (par son ID)."""
     content = get_archived_message(message_id)
     if content:
         content_anonymized = content[:200]
-        users = ["User1", "User2", "User3"]  # À personnaliser
-        view = VoteView(message_id, users)
-        await ctx.send(f"📄 **Message anonymisé :**\n{content_anonymized}", view=view)
+        await ctx.send(f"📄 **Message anonymisé :**\n{content_anonymized}")
     else:
         await ctx.send("⚠️ Message non trouvé dans la base.")
 
@@ -240,13 +229,11 @@ async def random_message(ctx):
     if result:
         message_id, content, url = result
         content_anonymized = content[:200]
-        users = ["User1", "User2", "User3"]  # toujours à personnaliser
-        view = VoteView(message_id, users)
-        await ctx.send(f"🎲 **Message aléatoire :**\n{content_anonymized}\n\n🔗 [Lien vers le message]({url})", view=view)
+        await ctx.send(f"🎲 **Message aléatoire :**\n{content_anonymized}\n\n🔗 [Lien vers le message]({url})")
     else:
         await ctx.send("⚠️ Aucun message archivé pour le moment.")
 
-class PollView(View):
+""" class PollView(View):
     def __init__(self, message_id, choices):
         super().__init__(timeout=30)  # durée du sondage en secondes
         self.message_id = message_id
@@ -279,17 +266,59 @@ class PollView(View):
         results = "\n".join(f"**{k}** : {v} vote(s)" for k,v in self.votes.items())
         for child in self.children:
             child.disabled = True
-        await self.message.edit(content=f"📊 Résultats du sondage pour le message {self.message_id} :\n{results}", view=self)
+        await self.message.edit(content=f"📊 Résultats du sondage pour le message {self.message_id} :\n{results}", view=self) """
+
+
+ # Création d'une View custom pour gérer le vote
+class VotingView(View):
+    def __init__(self, choices, true_author):
+        super().__init__(timeout=30)
+        self.votes = {choice: 0 for choice in choices}
+        self.voted_users = {}  # dict user_id -> choix
+        self.true_author = true_author
+
+        for choice in choices:
+            button = Button(label=choice, style=discord.ButtonStyle.primary)
+            button.callback = self.make_callback(choice)
+            self.add_item(button)
+
+    def make_callback(self, choice):
+        async def callback(interaction):
+            if interaction.user.id in self.voted_users:
+                await interaction.response.send_message("❌ Tu as déjà voté.", ephemeral=True)
+                return
+            self.votes[choice] += 1
+            self.voted_users[interaction.user.id] = choice
+            await interaction.response.send_message(f"✅ Vote reçu pour **{choice}**.", ephemeral=True)
+        return callback
+
+    async def on_timeout(self):
+        # Affichage des résultats
+        results_text = "\n".join(f"**{choice}** : {count} vote(s)" for choice, count in self.votes.items())
+
+        # Trouver les gagnants (ceux qui ont voté pour le vrai auteur)
+        winners_ids = [user_id for user_id, vote in self.voted_users.items() if vote == self.true_author]
+
+        # Préparation du message des gagnants
+        if winners_ids:
+            winners_mentions = " ".join(f"<@{user_id}>" for user_id in winners_ids)
+            winners_message = f"🎉 Félicitations aux bons devineurs : {winners_mentions} !"
+        else:
+            winners_message = "Aucun bon vote cette fois, essayez encore !"
+
+        # Désactiver tous les boutons
+        for item in self.children:
+            item.disabled = True
+
+        # Modifier le message original pour afficher résultats + gagnants
+        await self.message.edit(content=f"📊 Résultats du sondage pour ce message :\n{results_text}\n\n{winners_message}", view=self)
+
 
 @bot.command()
 async def random_message_poll(ctx):
-    """
-    Affiche un message archivé aléatoire anonymisé avec un sondage pour deviner l'auteur réel.
-    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1) Récupérer un message au hasard avec son auteur réel
     cursor.execute('SELECT message_id, content, author_name FROM archived_messages ORDER BY RANDOM() LIMIT 1')
     message_row = cursor.fetchone()
     if not message_row:
@@ -298,53 +327,63 @@ async def random_message_poll(ctx):
         return
     message_id, content, true_author = message_row
 
-    # 2) Récupérer deux autres auteurs au hasard différents
-    cursor.execute('SELECT DISTINCT author_name FROM archived_messages WHERE author_name != ? ORDER ' 
-                   'BY RANDOM() LIMIT 2', (true_author,))
+    cursor.execute('SELECT DISTINCT author_name FROM archived_messages WHERE author_name != ? ORDER BY RANDOM() LIMIT 2', (true_author,))
     other_authors = [row[0] for row in cursor.fetchall()]
     conn.close()
 
-    # On crée la liste des choix (1 vrai auteur + 2 faux auteurs)
     choices = [true_author] + other_authors
     random.shuffle(choices)
-
-    # On limite la taille du message pour l'affichage
     content_anonymized = content[:200]
 
-    # Création d'une View custom pour gérer le vote
-    class VotingView(View):
-        def __init__(self, choices):
-            super().__init__(timeout=30)
-            self.votes = {choice: 0 for choice in choices}
-            self.voted_users = set()
-
-            # Ajout des boutons dynamiquement
-            for choice in choices:
-                button = Button(label=choice, style=discord.ButtonStyle.primary)
-                button.callback = self.make_callback(choice)
-                self.add_item(button)
-
-        def make_callback(self, choice):
-            async def callback(interaction):
-                if interaction.user.id in self.voted_users:
-                    await interaction.response.send_message("❌ Tu as déjà voté.", ephemeral=True)
-                    return
-                self.votes[choice] += 1
-                self.voted_users.add(interaction.user.id)
-                await interaction.response.send_message(f"✅ Vote reçu pour **{choice}**.", ephemeral=True)
-            return callback
-
-        async def on_timeout(self):
-            # Afficher résultats
-            result_str = "\n".join(f"**{choice}** : {count} vote(s)" for choice, count in self.votes.items())
-            for item in self.children:
-                item.disabled = True
-            await message.edit(content=f"📊 Résultats du sondage pour ce message :\n{result_str}", view=self)
-
-    voting_view = VotingView(choices)
-
+    voting_view = VotingView(choices, true_author)
     message = await ctx.send(f"📄 **Devine l’auteur du message anonymisé :**\n{content_anonymized}", view=voting_view)
     voting_view.message = message
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def scan(ctx, channel: discord.TextChannel, limit_per_channel: int = 1000):
+    """
+    Scanne un seul canal pour archiver les messages ayant assez de réactions.
+    Usage: !scan #nom_du_canal [limite_messages]
+    """
+    total_archived = 0
+    await ctx.send(f"🔍 Scan du canal {channel.mention} en cours...")
+
+    last_id = get_last_scanned_id(channel.id)
+    history_args = {'limit': limit_per_channel}
+    if last_id:
+        history_args['after'] = discord.Object(id=last_id)
+
+    counter = 0
+    async for message in channel.history(**history_args):
+        if message.author.bot:
+            continue  # Ignore messages bots/apps
+
+        if is_message_archived(message.id):
+            continue
+
+        for reaction in message.reactions:
+            if reaction.count >= reaction_threshold:
+                archive_message(
+                    message.id,
+                    message.content,
+                    reaction.count,
+                    channel.id,
+                    ctx.guild.id,
+                    message.author.name,
+                    f"https://discord.com/channels/{ctx.guild.id}/{channel.id}/{message.id}"
+                )
+                total_archived += 1
+                break
+
+        update_last_scanned_id(channel.id, message.id)
+
+        counter += 1
+        if counter % 500 == 0:
+            await asyncio.sleep(2)  # Pause anti rate-limit
+
+    await ctx.send(f"✅ Scan terminé sur {channel.mention}, {total_archived} messages archivés.")
 
 
 @bot.command()
