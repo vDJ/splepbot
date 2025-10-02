@@ -1,14 +1,17 @@
-# Utiliser l'image Python officielle
-FROM python:3.9-slim
+# Utilise une image Python officielle
+FROM python:3.11-slim
 
-# Définir le répertoire de travail dans le container
+# Crée un dossier de travail
 WORKDIR /app
 
-# Copier les fichiers du projet dans le container
+# Copie les fichiers
 COPY . /app
 
-# Installer les dépendances
+# Installe les dépendances
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Définir la commande par défaut pour exécuter le bot
+# Dossier pour la base de données (sera monté)
+VOLUME /app/data
+
+# Lance le bot
 CMD ["python", "bot.py"]

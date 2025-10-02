@@ -1,0 +1,9 @@
+services:
+  discord-bot:
+    build: .
+    container_name: splepbot
+    volumes:
+      - ./data:/app/data   # Persistante DB
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
