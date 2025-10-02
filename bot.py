@@ -39,6 +39,8 @@ def init_db():
                         server_id INTEGER,
                         author_name TEXT,
                         message_url TEXT,
+                        image_url TEXT, 
+                        reaction_emoji TEXT,
                         archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )''')
 
@@ -50,14 +52,14 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Archive un message dans la base
-def archive_message(message_id, content, reactions, channel_id, server_id, author_name, message_url):
+# Archive un message dans la base, avec adresse de l'image si disponible
+def archive_message(message_id, content, reactions, channel_id, server_id, author_name, message_url, image_url=None, reaction_emoji=None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''INSERT OR IGNORE INTO archived_messages 
-                      (message_id, content, reactions, channel_id, server_id, author_name, message_url)
-                      VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                   (message_id, content, reactions, channel_id, server_id, author_name, message_url))
+                      (message_id, content, reactions, channel_id, server_id, author_name, message_url, image_url, reaction_emoji)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   (message_id, content, reactions, channel_id, server_id, author_name, message_url, image_url, reaction_emoji))
     conn.commit()
     conn.close()
 
@@ -70,8 +72,6 @@ def is_message_archived(message_id):
     result = cursor.fetchone()
     conn.close()
     return result is not None
-
-
 
 # Récupère le contenu d'un message archivé
 def get_archived_message(message_id):
@@ -137,6 +137,14 @@ async def on_reaction_add(reaction, user):
     # Si le message atteint le seuil de réactions
     if reaction.count >= reaction_threshold:
         if not is_message_archived(message.id):
+            # À placer juste avant l'appel à archive_message
+            image_url = None
+            if message.attachments:
+                for attachment in message.attachments:
+                    if attachment.content_type and attachment.content_type.startswith("image/"):
+                        image_url = attachment.url
+                        break
+
             archive_message(
                 message.id,
                 message.content,
@@ -144,7 +152,9 @@ async def on_reaction_add(reaction, user):
                 message.channel.id,
                 message.guild.id,
                 message.author.name,
-                f"https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}"
+                f"https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}", 
+                image_url,
+                str(reaction.emoji)
             )
             await message.channel.send(f"💾 Message archivé (seuil atteint) : {message.content[:50]}...")
 
@@ -202,6 +212,14 @@ async def archive(ctx, message_id: int = None):
         await ctx.send("⚠️ Ce message ne contient pas de texte, il ne sera pas archivé.")
         return
 
+    # À placer juste avant l'appel à archive_message
+    image_url = None
+    if target_message.attachments:
+        for attachment in target_message.attachments:
+            if attachment.content_type and attachment.content_type.startswith("image/"):
+                image_url = attachment.url
+                break
+
 
     max_reactions = max([r.count for r in target_message.reactions], default=0)
     url = f"https://discord.com/channels/{target_message.guild.id}/{target_message.channel.id}/{target_message.id}"
@@ -212,7 +230,9 @@ async def archive(ctx, message_id: int = None):
         target_message.channel.id,
         target_message.guild.id,
         target_message.author.name,
-        url
+        url,
+        image_url,
+        str(target_message.reaction.emoji)
     )
     await ctx.send(f"💾 Message archivé avec succès : {target_message.content[:50]}...\nLien : {url}")
 
@@ -231,62 +251,42 @@ async def random_message(ctx):
     """Affiche un message archivé aléatoire anonymisé avec lien."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT message_id, content, message_url FROM archived_messages ORDER BY RANDOM() LIMIT 1')
+    cursor.execute('SELECT message_id, content, message_url, image_url, reaction_emoji FROM archived_messages ORDER BY RANDOM() LIMIT 1')
     result = cursor.fetchone()
     conn.close()
 
     if result:
-        message_id, content, url = result
+        message_id, content, url, image_url, reaction_emoji = result
         content_anonymized = content[:200]
-        await ctx.send(f"🎲 **Message aléatoire :**\n{content_anonymized}\n\n🔗 [Lien vers le message]({url})")
+        
+        embed = discord.Embed(
+            title="🎲 Message aléatoire",
+            description=content_anonymized,
+            color=discord.Color.blurple()
+        )
+        if reaction_emoji:
+            embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
+        
+        embed.add_field(name="Lien", value=f"[Voir sur Discord]({url})", inline=False)
+
+        if image_url:
+            embed.set_image(url=image_url)
+
+        await ctx.send(embed=embed)
     else:
         await ctx.send("⚠️ Aucun message archivé pour le moment.")
-
-""" class PollView(View):
-    def __init__(self, message_id, choices):
-        super().__init__(timeout=30)  # durée du sondage en secondes
-        self.message_id = message_id
-        self.choices = choices
-        self.votes = {name: 0 for name in choices}
-        self.voted_users = set()
-
-        for name in choices:
-            self.add_item(Button(label=name, style=discord.ButtonStyle.primary))
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Empêche le vote multiple par un même utilisateur
-        if interaction.user.id in self.voted_users:
-            await interaction.response.send_message("❌ Tu as déjà voté.", ephemeral=True)
-            return False
-        return True
-
-    @discord.ui.button(label="Vote", style=discord.ButtonStyle.primary)
-    async def button_callback(self, interaction: discord.Interaction, button: Button):
-        # Cette méthode sera redéfinie plus bas via on_click
-        pass
-
-    async def on_button_click(self, interaction: discord.Interaction):
-        label = interaction.data['custom_id'] if 'custom_id' in interaction.data else interaction.data['component_type']
-        # On va plutôt gérer via interaction.component.label
-        choice = interaction.data['custom_id'] if 'custom_id' in interaction.data else None
-
-    async def on_timeout(self):
-        # À la fin du timeout, on édite le message pour afficher les résultats
-        results = "\n".join(f"**{k}** : {v} vote(s)" for k,v in self.votes.items())
-        for child in self.children:
-            child.disabled = True
-        await self.message.edit(content=f"📊 Résultats du sondage pour le message {self.message_id} :\n{results}", view=self) """
-
 
 
 # Création d'une View custom pour gérer le vote
 class VotingView(View):
-    def __init__(self, choices, true_author, message_url):
+    def __init__(self, choices, true_author, message_url, image_url=None, reaction_emoji=None):
         super().__init__(timeout=30)
         self.votes = {choice: 0 for choice in choices}
         self.voted_users = {}  # user_id -> choix
         self.true_author = true_author
         self.message_url = message_url
+        self.image_url = image_url
+        self.reaction_emoji = reaction_emoji
 
         for choice in choices:
             button = Button(label=choice, style=discord.ButtonStyle.primary)
@@ -336,13 +336,13 @@ async def random_message_poll(ctx):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    cursor.execute('SELECT message_id, content, author_name, message_url FROM archived_messages ORDER BY RANDOM() LIMIT 1')
+    cursor.execute('SELECT message_id, content, author_name, message_url, image_url, reaction_emoji FROM archived_messages ORDER BY RANDOM() LIMIT 1')
     row = cursor.fetchone()
     if not row:
         await ctx.send("⚠️ Aucun message archivé pour le moment.")
         conn.close()
         return
-    message_id, content, true_author, message_url = row
+    message_id, content, true_author, message_url, image_url, reaction_emoji = row
 
     cursor.execute('SELECT DISTINCT author_name FROM archived_messages WHERE author_name != ? ORDER BY RANDOM() LIMIT 2', (true_author,))
     other_authors = [r[0] for r in cursor.fetchall()]
@@ -350,15 +350,27 @@ async def random_message_poll(ctx):
 
     choices = [true_author] + other_authors
     random.shuffle(choices)
-    content_anonymized = content[:200]
+    content_anonymized = content[:200] + ("..." if len(content) > 200 else "")
+
+    embed = discord.Embed(
+        title="📄 Devine l’auteur du message anonymisé",
+        description=content_anonymized,
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="Lien", value=f"[Voir sur Discord]({message_url})", inline=False)
+
+    if image_url:
+        embed.set_image(url=image_url)
+
+    if reaction_emoji:
+        embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
 
     voting_view = VotingView(choices, true_author, message_url)
-    message = await ctx.send(f"📄 **Devine l’auteur du message anonymisé :**\n{content_anonymized}", view=voting_view)
+    message = await ctx.send(embed=embed, view=voting_view)
     voting_view.message = message
 
 
-
-@bot.command()
+@bot.command() #scan un canal (1000 derniers messages ou 14 derniers jours, pas sûr)
 @commands.has_permissions(administrator=True)
 async def scan(ctx, channel: discord.TextChannel, limit_per_channel: int = 1000):
     """
@@ -386,6 +398,14 @@ async def scan(ctx, channel: discord.TextChannel, limit_per_channel: int = 1000)
 
         for reaction in message.reactions:
             if reaction.count >= reaction_threshold:
+                # À placer juste avant l'appel à archive_message
+                image_url = None
+                if message.attachments:
+                    for attachment in message.attachments:
+                        if attachment.content_type and attachment.content_type.startswith("image/"):
+                            image_url = attachment.url
+                            break
+
                 archive_message(
                     message.id,
                     message.content,
@@ -393,7 +413,9 @@ async def scan(ctx, channel: discord.TextChannel, limit_per_channel: int = 1000)
                     channel.id,
                     ctx.guild.id,
                     message.author.name,
-                    f"https://discord.com/channels/{ctx.guild.id}/{channel.id}/{message.id}"
+                    f"https://discord.com/channels/{ctx.guild.id}/{channel.id}/{message.id}",
+                    image_url,
+                    str(reaction.emoji)
                 )
                 total_archived += 1
                 break
@@ -407,7 +429,7 @@ async def scan(ctx, channel: discord.TextChannel, limit_per_channel: int = 1000)
     await ctx.send(f"✅ Scan terminé sur {channel.mention}, {total_archived} messages archivés.")
 
 
-@bot.command()
+@bot.command() #scan tous les canaux (1000 derniers messages ou 14 derniers jours, pas sûr)
 @commands.has_permissions(administrator=True)
 async def scan_all(ctx, limit_per_channel: int = 1000):
     """Scanne tous les salons texte pour archiver les messages ayant assez de réactions."""
@@ -435,6 +457,13 @@ async def scan_all(ctx, limit_per_channel: int = 1000):
 
                 for reaction in message.reactions:
                     if reaction.count >= reaction_threshold:
+                        # À placer juste avant l'appel à archive_message
+                        image_url = None
+                        if message.attachments:
+                            for attachment in message.attachments:
+                                if attachment.content_type and attachment.content_type.startswith("image/"):
+                                    image_url = attachment.url
+                                    break
                         archive_message(
                             message.id,
                             message.content,
@@ -442,7 +471,9 @@ async def scan_all(ctx, limit_per_channel: int = 1000):
                             message.channel.id,
                             message.guild.id,
                             message.author.name,
-                            f"https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}"
+                            f"https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}",
+                            image_url,
+                            str(reaction.emoji)
                         )
                         total_archived += 1
                         break
@@ -458,7 +489,7 @@ async def scan_all(ctx, limit_per_channel: int = 1000):
 
     await ctx.send(f"🎉 Scan terminé. {total_archived} messages archivés au total.")
 
-@bot.command()
+@bot.command() #scan TOUS les messages d'un canal (peut être long)
 @commands.has_permissions(administrator=True)
 async def scan_full(ctx, channel: discord.TextChannel):
     """
@@ -491,6 +522,14 @@ async def scan_full(ctx, channel: discord.TextChannel):
 
                 for reaction in message.reactions:
                     if reaction.count >= reaction_threshold:
+                        # À placer juste avant l'appel à archive_message
+                        image_url = None
+                        if message.attachments:
+                            for attachment in message.attachments:
+                                if attachment.content_type and attachment.content_type.startswith("image/"):
+                                    image_url = attachment.url
+                                    break
+
                         message_url = f"https://discord.com/channels/{ctx.guild.id}/{channel.id}/{message.id}"
                         archive_message(
                             message.id,
@@ -499,7 +538,9 @@ async def scan_full(ctx, channel: discord.TextChannel):
                             channel.id,
                             ctx.guild.id,
                             message.author.name,
-                            message_url
+                            message_url,
+                            image_url,
+                            str(reaction.emoji)
                         )
                         total_archived += 1
                         break
@@ -509,7 +550,7 @@ async def scan_full(ctx, channel: discord.TextChannel):
 
             # Pause tous les 1000 messages
             if scanned % 1000 == 0:
-                await ctx.send(f"⏳ {scanned} messages scannés dans {channel.mention}, {total_archived} archivés...")
+                #await ctx.send(f"⏳ {scanned} messages scannés dans {channel.mention}, {total_archived} archivés...")
                 await asyncio.sleep(3)
 
         await ctx.send(f"✅ Scan terminé dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés.")
