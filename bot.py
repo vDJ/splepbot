@@ -458,6 +458,69 @@ async def scan_all(ctx, limit_per_channel: int = 1000):
 
     await ctx.send(f"🎉 Scan terminé. {total_archived} messages archivés au total.")
 
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def scan_full(ctx, channel: discord.TextChannel):
+    """
+    Scanne tout l'historique d'un canal (attention : peut être long).
+    """
+    await ctx.send(f"📜 Début du scan complet du canal {channel.mention}...")
+
+    total_archived = 0
+    scanned = 0
+    last_message = None
+
+    try:
+        while True:
+            # On récupère 100 messages à partir du plus récent ou du message précédent
+            messages = [m async for m in channel.history(limit=100, before=last_message)]
+            if not messages:
+                break  # plus de messages à traiter
+
+            for message in messages:
+                scanned += 1
+
+                if message.author.bot:
+                    continue
+
+                if is_message_archived(message.id):
+                    continue
+
+                if not message.content or message.content.strip() == "":
+                    continue
+
+                for reaction in message.reactions:
+                    if reaction.count >= reaction_threshold:
+                        message_url = f"https://discord.com/channels/{ctx.guild.id}/{channel.id}/{message.id}"
+                        archive_message(
+                            message.id,
+                            message.content,
+                            reaction.count,
+                            channel.id,
+                            ctx.guild.id,
+                            message.author.name,
+                            message_url
+                        )
+                        total_archived += 1
+                        break
+
+                # Pour permettre la pagination "before="
+                last_message = message
+
+            # Pause tous les 1000 messages
+            if scanned % 1000 == 0:
+                await ctx.send(f"⏳ {scanned} messages scannés dans {channel.mention}, {total_archived} archivés...")
+                await asyncio.sleep(3)
+
+        await ctx.send(f"✅ Scan terminé dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés.")
+
+    except discord.Forbidden:
+        await ctx.send("❌ Je n'ai pas accès à ce canal.")
+    except Exception as e:
+        await ctx.send(f"⚠️ Erreur pendant le scan : {e}")
+
+
+
 # ============================
 # LANCEMENT DU BOT
 # ============================
