@@ -16,7 +16,7 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Seuil par défaut de réactions pour l'archivage automatique
-reaction_threshold = 5
+reaction_threshold = 4
 
 # Chemin vers la base de données SQLite (sera montée dans Docker)
 DB_PATH = 'data/messages.db'
@@ -357,7 +357,7 @@ async def random_message_poll(ctx):
         description=content_anonymized,
         color=discord.Color.orange()
     )
-    embed.add_field(name="Lien", value=f"[Voir sur Discord]({message_url})", inline=False)
+    #embed.add_field(name="Lien", value=f"[Voir sur Discord]({message_url})", inline=False)
 
     if image_url:
         embed.set_image(url=image_url)
@@ -550,7 +550,7 @@ async def scan_full(ctx, channel: discord.TextChannel):
 
             # Pause tous les 1000 messages
             if scanned % 1000 == 0:
-                #await ctx.send(f"⏳ {scanned} messages scannés dans {channel.mention}, {total_archived} archivés...")
+                await ctx.send(f"⏳ {scanned} messages scannés dans {channel.mention}, {total_archived} archivés...")
                 await asyncio.sleep(3)
 
         await ctx.send(f"✅ Scan terminé dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés.")
