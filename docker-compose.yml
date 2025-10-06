@@ -4,6 +4,8 @@ services:
     container_name: splepbot
     volumes:
       - ./data:/app/data   # Persistante DB
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped

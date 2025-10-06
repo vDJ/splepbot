@@ -4,6 +4,11 @@ from discord.ui import Button, View
 import sqlite3
 import asyncio
 import random
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 # ============================
 # CONFIGURATION DU BOT
@@ -226,7 +231,7 @@ async def archive(ctx, message_id: int = None):
     archive_message(
         target_message.id,
         target_message.content,
-        max_reactions,
+        target_message.reactions,
         target_message.channel.id,
         target_message.guild.id,
         target_message.author.name,
@@ -357,7 +362,6 @@ async def random_message_poll(ctx):
         description=content_anonymized,
         color=discord.Color.orange()
     )
-    #embed.add_field(name="Lien", value=f"[Voir sur Discord]({message_url})", inline=False)
 
     if image_url:
         embed.set_image(url=image_url)
@@ -492,9 +496,7 @@ async def scan_all(ctx, limit_per_channel: int = 1000):
 @bot.command() #scan TOUS les messages d'un canal (peut être long)
 @commands.has_permissions(administrator=True)
 async def scan_full(ctx, channel: discord.TextChannel):
-    """
-    Scanne tout l'historique d'un canal (attention : peut être long).
-    """
+
     await ctx.send(f"📜 Début du scan complet du canal {channel.mention}...")
 
     total_archived = 0
@@ -566,4 +568,4 @@ async def scan_full(ctx, channel: discord.TextChannel):
 # LANCEMENT DU BOT
 # ============================
 
-bot.run("MTQyMzIyMTU2MjQ2MjQzNzM5Ng.GPVwdn.71dlmYUjDRnLkrWzRYWVIQ8w_E11VlZlUjNJQQ")
+bot.run("TOKEN")
