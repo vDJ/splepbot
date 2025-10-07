@@ -100,7 +100,7 @@ class Polls(commands.Cog):
 
         choices = [true_author] + other_authors
         random.shuffle(choices)
-        content_anonymized = content[:200] + ("..." if len(content) > 200 else "")
+        content_anonymized = content[:1000] + ("..." if len(content) > 1000 else "")
 
         # Si c’est un tweet → on l’affiche directement
         if content and ("twitter.com" in content or "x.com" in content):

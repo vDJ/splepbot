@@ -29,7 +29,7 @@ class Archive(commands.Cog):
 
         if await self._archive_message(target_message):
             await interaction.response.send_message(
-                f"💾 Message archivé avec succès : {target_message.content[:50]}...\n"
+                f"💾 Message archivé avec succès : {target_message.content[:200]}...\n"
                 f"[Voir le message](https://discord.com/channels/{target_message.guild.id}/{target_message.channel.id}/{target_message.id})"
             )
         else:
@@ -100,7 +100,7 @@ class Archive(commands.Cog):
         """Affiche anonymement un message archivé (par son ID)."""
         content = get_archived_message(message_id)
         if content:
-            content_anonymized = content[:200]
+            content_anonymized = content[:1000]
             await ctx.send(f"📄 **Message anonymisé :**\n{content_anonymized}")
         else:
             await ctx.send("⚠️ Message non trouvé dans la base.")
