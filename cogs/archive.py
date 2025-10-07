@@ -8,6 +8,10 @@ class Archive(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    ###################
+    #COMMANDS
+    ###################
+
     #On sépare la commande Archive en deux : une en slash command, une en préfixe
     # --- SLASH COMMAND ---
     @app_commands.command(
@@ -134,7 +138,35 @@ class Archive(commands.Cog):
         else:
             await interaction.response.send_message("⚠️ Aucun message archivé pour le moment.")
 
+    #UNARCHIVE MESSAGE
+    @app_commands.command(
+        name="unarchive",
+        description="Désarchive un message (le supprime de la base)."
+    )
+    @app_commands.describe(message_id="L’ID du message à désarchiver")
+    async def unarchive(self, interaction: discord.Interaction, message_id: str):
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
 
+        # Vérifier si le message est dans la base
+        cursor.execute("SELECT 1 FROM archived_messages WHERE message_id = ?", (message_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            conn.close()
+            await interaction.response.send_message("⚠️ Ce message n’est pas archivé.", ephemeral=True)
+            return
+
+        # Supprimer l'entrée
+        cursor.execute("DELETE FROM archived_messages WHERE message_id = ?", (message_id,))
+        conn.commit()
+        conn.close()
+
+        await interaction.response.send_message(f"🗑️ Message {message_id} désarchivé avec succès.", ephemeral=True)
+
+    #########################
+    #LISTENER
+    #########################
     # Quand une réaction est ajoutée
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
