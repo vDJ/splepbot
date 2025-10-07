@@ -99,7 +99,7 @@ class Polls(commands.Cog):
 
         choices = [true_author] + other_authors
         random.shuffle(choices)
-        content_anonymized = content[:200] + ("..." if len(content) > 200 else "")
+        content_anonymized = content[:1000] + ("..." if len(content) > 1000 else "")
 
         embed = discord.Embed(
             title="📄 Devine l’auteur du message anonymisé",
