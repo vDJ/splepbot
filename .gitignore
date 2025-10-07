@@ -1,2 +1,4 @@
 .env
 data/messages.db
+__pycache__/
+cogs/__pycache__/
