@@ -60,8 +60,8 @@ class Polls(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def random_message_poll(self, ctx):
+    @app_commands.command(name="random_message_poll", description="Affiche un message archivé anonymisé avec vote pour l’auteur.")
+    async def random_message_poll(self, interaction: discord.Interaction):
         """Affiche un message archivé anonymisé avec vote pour l’auteur."""
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -70,7 +70,7 @@ class Polls(commands.Cog):
         cursor.execute('SELECT message_id, content, author_name, message_url, image_url, reaction_emoji FROM archived_messages ORDER BY RANDOM() LIMIT 1')
         row = cursor.fetchone()
         if not row:
-            await ctx.send("⚠️ Aucun message archivé pour le moment.")
+            await interaction.response.send_message("⚠️ Aucun message archivé pour le moment.")
             conn.close()
             return
         message_id, content, true_author, message_url, image_url, reaction_emoji = row
@@ -92,12 +92,12 @@ class Polls(commands.Cog):
 
         if image_url:
             embed.set_image(url=image_url)
-            
+
         if reaction_emoji:
             embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
 
         voting_view = VotingView(choices, true_author, message_url)
-        message = await ctx.send(embed=embed, view=voting_view)
+        message = await interaction.response.send_message(embed=embed, view=voting_view)
         voting_view.message = message
 
 async def setup(bot):
