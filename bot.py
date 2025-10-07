@@ -568,4 +568,4 @@ async def scan_full(ctx, channel: discord.TextChannel):
 # LANCEMENT DU BOT
 # ============================
 
-bot.run("TOKEN")
+bot.run(TOKEN)
