@@ -182,19 +182,19 @@ async def on_ready():
 # COMMANDES DU BOT
 # ============================
 
-@bot.command()
-async def set_threshold(ctx, new_threshold: int):
-    """Modifie dynamiquement le seuil de réactions nécessaire à l’archivage."""
-    global reaction_threshold
-    reaction_threshold = new_threshold
-    await ctx.send(f"🔧 Le seuil des réactions est maintenant de {reaction_threshold}.")
+# @bot.command()
+# async def set_threshold(ctx, new_threshold: int):
+#     """Modifie dynamiquement le seuil de réactions nécessaire à l’archivage."""
+#     global reaction_threshold
+#     reaction_threshold = new_threshold
+#     await ctx.send(f"🔧 Le seuil des réactions est maintenant de {reaction_threshold}.")
 
 # @bot.command()
 # async def archive(ctx, message_id: int = None):
 #     """
 #     Archive un message :
 #     - si message_id donné, archive ce message,
-#     - sinon archive le message auquel la commande répond (reply).
+#     - sinon archive le message auquel la commande répond (reply).S
 #     """
 #     target_message = None
 
