@@ -4,7 +4,11 @@ from discord.ui import Button, View
 from discord import app_commands
 import random
 import sqlite3
-from db import DB_PATH, get_random_archived_message
+from db import DB_PATH
+
+# ============================
+# VIEW POUR LE VOTE
+# ============================
 
 class VotingView(View):
     def __init__(self, choices, true_author, message_url, image_url=None, reaction_emoji=None):
@@ -15,6 +19,7 @@ class VotingView(View):
         self.message_url = message_url
         self.image_url = image_url
         self.reaction_emoji = reaction_emoji
+        self.message = None  # sera assigné après l’envoi du message
 
         for choice in choices:
             button = Button(label=choice, style=discord.ButtonStyle.primary)
@@ -22,7 +27,7 @@ class VotingView(View):
             self.add_item(button)
 
     def make_callback(self, choice):
-        async def callback(interaction):
+        async def callback(interaction: discord.Interaction):
             if interaction.user.id in self.voted_users:
                 await interaction.response.send_message("❌ Tu as déjà voté.", ephemeral=True)
                 return
@@ -32,22 +37,22 @@ class VotingView(View):
         return callback
 
     async def on_timeout(self):
-        # Résultats votes
+        if self.message is None:
+            return  # sécurité
+
+        # Résultats des votes
         results_text = "\n".join(f"**{choice}** : {count} vote(s)" for choice, count in self.votes.items())
-
-        # Gagnants qui ont voté juste
         winners_ids = [uid for uid, vote in self.voted_users.items() if vote == self.true_author]
-        if winners_ids:
-            winners_mentions = " ".join(f"<@{uid}>" for uid in winners_ids)
-            winners_message = f"🎉 Félicitations aux bons devineurs : {winners_mentions} !"
-        else:
-            winners_message = "Aucun bon vote cette fois, essayez encore !"
+        winners_message = (
+            "🎉 Félicitations aux bons devineurs : " + " ".join(f"<@{uid}>" for uid in winners_ids)
+            if winners_ids else "Aucun bon vote cette fois, essayez encore !"
+        )
 
-        # Désactivation boutons
+        # Désactiver les boutons
         for item in self.children:
             item.disabled = True
 
-        # Affichage message final avec bonne réponse + lien
+        # Message final
         final_msg = (
             f"📊 Résultats du sondage pour ce message :\n{results_text}\n\n"
             f"✅ La bonne réponse était : **{self.true_author}**\n"
@@ -57,21 +62,27 @@ class VotingView(View):
 
         await self.message.edit(content=final_msg, view=self)
 
+# ============================
+# COG POUR LES POLLS
+# ============================
+
 class Polls(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @app_commands.command(
-        name="random_message_poll", 
+        name="random_message_poll",
         description="Affiche un message archivé anonymisé avec vote pour l’auteur."
     )
     async def random_message_poll(self, interaction: discord.Interaction):
-        """Affiche un message archivé anonymisé avec vote pour l’auteur."""
+        # Connexion à la base
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # Choisir un message aléatoire
-        cursor.execute('SELECT message_id, content, author_name, message_url, image_url, reaction_emoji FROM archived_messages ORDER BY RANDOM() LIMIT 1')
+        cursor.execute(
+            'SELECT message_id, content, author_name, message_url, image_url, reaction_emoji '
+            'FROM archived_messages ORDER BY RANDOM() LIMIT 1'
+        )
         row = cursor.fetchone()
         if not row:
             await interaction.response.send_message("⚠️ Aucun message archivé pour le moment.")
@@ -79,8 +90,10 @@ class Polls(commands.Cog):
             return
         message_id, content, true_author, message_url, image_url, reaction_emoji = row
 
-        # Choisir deux auteurs aléatoires pour le sondage
-        cursor.execute('SELECT DISTINCT author_name FROM archived_messages WHERE author_name != ? ORDER BY RANDOM() LIMIT 2', (true_author,))
+        cursor.execute(
+            'SELECT DISTINCT author_name FROM archived_messages WHERE author_name != ? ORDER BY RANDOM() LIMIT 2',
+            (true_author,)
+        )
         other_authors = [r[0] for r in cursor.fetchall()]
         conn.close()
 
@@ -93,16 +106,22 @@ class Polls(commands.Cog):
             description=content_anonymized,
             color=discord.Color.orange()
         )
-
         if image_url:
             embed.set_image(url=image_url)
-
         if reaction_emoji:
             embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
 
+        # Déclarer la view
         voting_view = VotingView(choices, true_author, message_url)
-        message = await interaction.response.send_message(embed=embed, view=voting_view)
+
+        # Déférer la réponse et envoyer le message
+        await interaction.response.defer()
+        message = await interaction.followup.send(embed=embed, view=voting_view)
         voting_view.message = message
+
+# ============================
+# SETUP DU COG
+# ============================
 
 async def setup(bot):
     await bot.add_cog(Polls(bot))
