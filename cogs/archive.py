@@ -121,6 +121,10 @@ class Archive(commands.Cog):
             message_id, content, url, image_url, reaction_emoji = result
             content_anonymized = content[:1000]
 
+            if content and ("twitter.com" in content or "x.com" in content): #detection d'un lien twitter dans le contenu du message
+                await interaction.response.send_message(content)  # Discord fera l’embed auto
+                return
+
             embed = discord.Embed(
                 title="🎲 Message aléatoire",
                 description=content_anonymized,

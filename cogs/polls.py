@@ -88,6 +88,7 @@ class Polls(commands.Cog):
             await interaction.response.send_message("⚠️ Aucun message archivé pour le moment.")
             conn.close()
             return
+        
         message_id, content, true_author, message_url, image_url, reaction_emoji = row
 
         cursor.execute(
@@ -101,6 +102,12 @@ class Polls(commands.Cog):
         random.shuffle(choices)
         content_anonymized = content[:1000] + ("..." if len(content) > 1000 else "")
 
+        # Si c’est un tweet → on l’affiche directement
+        if content and ("twitter.com" in content or "x.com" in content):
+            await interaction.response.send_message(content)
+            return
+
+        # Sinon embed normal
         embed = discord.Embed(
             title="📄 Devine l’auteur du message anonymisé",
             description=content_anonymized,
