@@ -1,5 +1,6 @@
 from discord.ext import commands
 import discord
+from discord import app_commands
 import sqlite3
 from db import archive_message, is_message_archived, get_archived_message, DB_PATH
 
@@ -7,42 +8,60 @@ class Archive(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def archive(self, ctx, message_id: int = None):
-        """
-        Archive un message :
-        - si message_id donné, archive ce message,
-        - sinon archive le message auquel la commande répond (reply).
-        """
-        target_message = None
+    #On sépare la commande Archive en deux : une en slash command, une en préfixe
+    # --- SLASH COMMAND ---
+    @app_commands.command(
+        name="archive",
+        description="Archive un message par son ID."
+    )
+    @app_commands.describe(message_id="L'ID du message à archiver")
+    async def archive(self, interaction: discord.Interaction, message_id: str):
+        """Archive un message via son ID (slash command)."""
+        try:
+            target_message = await interaction.channel.fetch_message(int(message_id))
+        except discord.NotFound:
+            await interaction.response.send_message("⚠️ Message introuvable avec cet ID.", ephemeral=True)
+            return
 
-        if message_id:
-            try:
-                target_message = await ctx.channel.fetch_message(message_id)
-            except discord.NotFound:
-                await ctx.send("⚠️ Message introuvable avec cet ID.")
-                return
+        if await self._archive_message(target_message):
+            await interaction.response.send_message(
+                f"💾 Message archivé avec succès : {target_message.content[:50]}...\n"
+                f"[Voir le message](https://discord.com/channels/{target_message.guild.id}/{target_message.channel.id}/{target_message.id})"
+            )
         else:
-            if ctx.message.reference is None:
-                await ctx.send("⚠️ Tu dois soit donner un ID, soit répondre à un message pour l’archiver.")
-                return
-            try:
-                target_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            except discord.NotFound:
-                await ctx.send("⚠️ Message référencé introuvable.")
-                return
+            await interaction.response.send_message("⚠️ Ce message n’a pas pu être archivé.", ephemeral=True)
 
+    # --- PREFIX COMMAND ---
+    @commands.command(name="archive")
+    async def archive_prefix(self, ctx):
+        """Archive un message via reply (préfixe)."""
+        if not ctx.message.reference:
+            await ctx.send("⚠️ Tu dois répondre à un message pour l’archiver avec `!archive`.")
+            return
+
+        try:
+            target_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        except discord.NotFound:
+            await ctx.send("⚠️ Message introuvable.")
+            return
+
+        if await self._archive_message(target_message):
+            await ctx.send(
+                f"💾 Message archivé avec succès : {target_message.content[:50]}...\n"
+                f"[Voir le message](https://discord.com/channels/{target_message.guild.id}/{target_message.channel.id}/{target_message.id})"
+            )
+        else:
+            await ctx.send("⚠️ Ce message n’a pas pu être archivé.")
+
+    # --- FACTORISATION ---
+    async def _archive_message(self, target_message: discord.Message) -> bool:
+        """Logique commune d’archivage (utilisée par les deux commandes)."""
         if target_message.author.bot:
-            await ctx.send("⚠️ Impossible d’archiver un message posté par un bot.")
-            return
-
+            return False
         if is_message_archived(target_message.id):
-            await ctx.send("⚠️ Ce message est déjà archivé.")
-            return
-
+            return False
         if not target_message.content or target_message.content.strip() == "":
-            await ctx.send("⚠️ Ce message ne contient pas de texte, il ne sera pas archivé.")
-            return
+            return False
 
         # Gérer l'image éventuelle
         image_url = None
@@ -52,14 +71,11 @@ class Archive(commands.Cog):
                     image_url = attachment.url
                     break
 
-        # Lien vers le message
         url = f"https://discord.com/channels/{target_message.guild.id}/{target_message.channel.id}/{target_message.id}"
-
-        # Nombre maximum de réactions
         max_reactions = max([r.count for r in target_message.reactions], default=0)
         reaction_emoji = str(target_message.reactions[0].emoji) if target_message.reactions else None
 
-        # Archiver le message
+        #fonction d'archivage à proprement parler
         archive_message(
             target_message.id,
             target_message.content,
@@ -71,9 +87,10 @@ class Archive(commands.Cog):
             image_url,
             reaction_emoji
         )
+        return True
 
-        await ctx.send(f"💾 Message archivé avec succès : {target_message.content[:50]}...\nLien : {url}")
 
+    # SHOW MESSAGE
     @commands.command()
     async def show_message(self, ctx, message_id: int):
         """Affiche anonymement un message archivé (par son ID)."""
@@ -84,9 +101,12 @@ class Archive(commands.Cog):
         else:
             await ctx.send("⚠️ Message non trouvé dans la base.")
 
-    @commands.command()
-    async def random_message(self, ctx):
-        """Affiche un message archivé aléatoire anonymisé avec lien."""
+    #SHOW RANDOM MESSAGE
+    @app_commands.command(
+        name="random_message",
+        description="Affiche un message archivé aléatoire anonymisé avec lien."
+    )
+    async def random_message(self, interaction: discord.Interaction):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('SELECT message_id, content, message_url, image_url, reaction_emoji FROM archived_messages ORDER BY RANDOM() LIMIT 1')
@@ -104,15 +124,15 @@ class Archive(commands.Cog):
             )
             if reaction_emoji:
                 embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
-
+            
             embed.add_field(name="Lien", value=f"[Voir sur Discord]({url})", inline=False)
 
             if image_url:
                 embed.set_image(url=image_url)
 
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
         else:
-            await ctx.send("⚠️ Aucun message archivé pour le moment.")
+            await interaction.response.send_message("⚠️ Aucun message archivé pour le moment.")
 
 
     # Quand une réaction est ajoutée
