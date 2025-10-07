@@ -20,7 +20,8 @@ def init_db():
                         message_url TEXT,
                         image_url TEXT, 
                         reaction_emoji TEXT,
-                        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        times_polled INTERGER DEFAULT 0
                     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS scan_progress (

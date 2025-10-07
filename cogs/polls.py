@@ -63,7 +63,7 @@ class VotingView(View):
         await self.message.edit(content=final_msg, view=self)
 
 # ============================
-# COG POUR LES POLLS
+# COMMANDE POUR LES POLLS
 # ============================
 
 class Polls(commands.Cog):
@@ -81,7 +81,8 @@ class Polls(commands.Cog):
 
         cursor.execute(
             'SELECT message_id, content, author_name, message_url, image_url, reaction_emoji '
-            'FROM archived_messages ORDER BY RANDOM() LIMIT 1'
+            'FROM archived_messages' 
+            'ORDER BY times_polled ASC, RANDOM() LIMIT 1'
         )
         row = cursor.fetchone()
         if not row:
@@ -96,6 +97,11 @@ class Polls(commands.Cog):
             (true_author,)
         )
         other_authors = [r[0] for r in cursor.fetchall()]
+
+        # incrémenter le compteur
+        cursor.execute("UPDATE archived_messages SET times_polled = times_polled + 1 WHERE message_id = ?", (message_id,))
+        conn.commit()
+
         conn.close()
 
         choices = [true_author] + other_authors
