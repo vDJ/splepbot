@@ -1,9 +1,10 @@
+import discord
 from discord.ext import commands
 from discord.ui import Button, View
-import discord
+from discord import app_commands
 import random
 import sqlite3
-from db import DB_PATH
+from db import DB_PATH, get_random_archived_message
 
 class VotingView(View):
     def __init__(self, choices, true_author, message_url, image_url=None, reaction_emoji=None):
@@ -60,7 +61,10 @@ class Polls(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="random_message_poll", description="Affiche un message archivé anonymisé avec vote pour l’auteur.")
+    @app_commands.command(
+        name="random_message_poll", 
+        description="Affiche un message archivé anonymisé avec vote pour l’auteur."
+    )
     async def random_message_poll(self, interaction: discord.Interaction):
         """Affiche un message archivé anonymisé avec vote pour l’auteur."""
         conn = sqlite3.connect(DB_PATH)
