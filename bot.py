@@ -20,6 +20,14 @@ intents = discord.Intents.all()
 # Création de l'instance du bot avec le préfixe '!'
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Liste des extensions (cogs) à charger
+initial_extensions = [
+    "cogs.general",
+    "cogs.archive",  # on créera ces fichiers plus tard
+    "cogs.scan",
+    "cogs.polls"
+]
+
 # Seuil par défaut de réactions pour l'archivage automatique
 reaction_threshold = 4
 
@@ -122,8 +130,13 @@ def get_last_scanned_id(channel_id):
 # Quand le bot se connecte
 @bot.event
 async def on_ready():
-    init_db()
-    print(f'✅ Bot connecté en tant que {bot.user}')
+    print(f"✅ Bot connecté en tant que {bot.user}")
+    for ext in initial_extensions:
+        try:
+            await bot.load_extension(ext)
+            print(f"📦 Extension chargée : {ext}")
+        except Exception as e:
+            print(f"⚠️ Impossible de charger {ext}: {e}")
 
 # Quand une réaction est ajoutée
 @bot.event
