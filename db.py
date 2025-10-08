@@ -3,32 +3,43 @@ import sqlite3
 DB_PATH = "data/messages.db"
 
 # ============================
-# INITIALISATION DE LA BASE
+# INITIALISATION DES BASES
 # ============================
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS archived_messages (
-                        id INTEGER PRIMARY KEY,
-                        message_id INTEGER UNIQUE,
-                        content TEXT,
-                        reactions INTEGER,
-                        channel_id INTEGER,
-                        server_id INTEGER,
-                        author_name TEXT,
-                        message_url TEXT,
-                        image_url TEXT, 
-                        reaction_emoji TEXT,
-                        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        times_polled INTERGER DEFAULT 0
+    # Table des messages archivés
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS archived_messages (
+            id INTEGER PRIMARY KEY,
+            message_id INTEGER UNIQUE,
+            content TEXT,
+            reactions INTEGER,
+            channel_id INTEGER,
+            server_id INTEGER,
+            author_name TEXT,
+            message_url TEXT,
+            image_url TEXT, 
+            reaction_emoji TEXT,
+            archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            times_polled INTERGER DEFAULT 0
                     )''')
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS scan_progress (
-                        channel_id INTEGER PRIMARY KEY,
-                        last_message_id INTEGER
+    # Table de suivi du scan
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scan_progress (
+            channel_id INTEGER PRIMARY KEY,
+            last_message_id INTEGER
                     )''')
-
+    
+    # Table des scores pour les sondages
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS poll_scores (
+            user_id INTEGER PRIMARY KEY,
+            points  INTEGER NOT NULL DEFAULT 0
+                    )""")
+    
     conn.commit()
     conn.close()
 
@@ -95,3 +106,50 @@ def get_last_scanned_id(channel_id):
     row = cursor.fetchone()
     conn.close()
     return row[0] if row else None
+
+
+# ============================
+# FONCTIONS POUR LES RANKED
+# ============================
+def add_points(user_id: int, points: int = 1):
+    """Ajoute des points à un utilisateur."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO poll_scores (user_id, points)
+        VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET points = points + excluded.points
+    """, (user_id, points))
+    conn.commit()
+    conn.close()
+
+def get_leaderboard(limit: int = 10):
+    """Retourne le top des utilisateurs par points."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT user_id, points
+        FROM poll_scores
+        ORDER BY points DESC, user_id ASC
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def get_user_points(user_id: int) -> int:
+    """Retourne le nombre de points d’un utilisateur (0 si aucun)."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT points FROM poll_scores WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+def reset_leaderboard():
+    """Réinitialise complètement le classement."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM poll_scores")
+    conn.commit()
+    conn.close()
