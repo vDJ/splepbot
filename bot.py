@@ -44,6 +44,7 @@ async def on_ready():
 async def main():
     #Initialisation de la base de données
     db.init_db()
+    print(f"🗄️ Base de données initialisée.")
 
     # Charger les cogs avant de démarrer le bot
     for ext in initial_extensions:

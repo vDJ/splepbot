@@ -183,8 +183,9 @@ class Scan(commands.Cog):
                     last_message = message
 
                 if scanned % 1000 == 0:
-                    await interaction.followup.send(f"⏳ {scanned} messages scannés, {total_archived} archivés...", ephemeral=True)
                     await asyncio.sleep(3)
+                if scanned % 20000 == 0:
+                    await interaction.followup.send(f"🔍 Scan en cours dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés.", ephemeral=True)
 
             await interaction.followup.send(f"✅ Scan terminé dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés.")
 
