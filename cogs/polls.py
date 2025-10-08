@@ -11,8 +11,9 @@ from db import DB_PATH
 # ============================
 
 class VotingView(View):
-    def __init__(self, choices, true_author, message_url, image_url=None, reaction_emoji=None):
-        super().__init__(timeout=30)
+    def __init__(self, choices, true_author, message_url, image_url=None, reaction_emoji=None, timeout=30):
+        super().__init__(timeout=timeout) #timeout personnalisable, défaut 30s
+        self.timeout_value = timeout
         self.votes = {choice: 0 for choice in choices}
         self.voted_users = {}  # user_id -> choix
         self.true_author = true_author
@@ -54,7 +55,7 @@ class VotingView(View):
 
         # Message final
         final_msg = (
-            f"📊 Résultats du sondage pour ce message :\n{results_text}\n\n"
+            f"📊 Résultats du sondage (⏳ {self.timeout_value}s) :\n{results_text}\n\n"
             f"✅ La bonne réponse était : **{self.true_author}**\n"
             f"🔗 [Lien vers le message original]({self.message_url})\n\n"
             f"{winners_message}"
@@ -63,7 +64,7 @@ class VotingView(View):
         await self.message.edit(content=final_msg, view=self)
 
 # ============================
-# COG POUR LES POLLS
+# COMMANDE POUR LES POLLS
 # ============================
 
 class Polls(commands.Cog):
@@ -74,7 +75,14 @@ class Polls(commands.Cog):
         name="random_message_poll",
         description="Affiche un message archivé anonymisé avec vote pour l’auteur."
     )
-    async def random_message_poll(self, interaction: discord.Interaction):
+    async def random_message_poll(self, interaction: discord.Interaction, timeout : int = 30):
+#         Lancement d'un sondage avec un message archivé.
+#         :param timeout: durée du sondage en secondes (par défaut 30s).
+
+        if timeout < 15 or timeout > 600:
+            await interaction.response.send_message("⚠️ Le temps doit être entre 15 et 600 secondes.", ephemeral=True)
+            return
+        
         # Connexion à la base
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -119,7 +127,7 @@ class Polls(commands.Cog):
             embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
 
         # Déclarer la view
-        voting_view = VotingView(choices, true_author, message_url)
+        voting_view = VotingView(choices, true_author, message_url, image_url= image_url, reaction_emoji=reaction_emoji, timeout=timeout)
 
         # Déférer la réponse et envoyer le message
         await interaction.response.defer()
