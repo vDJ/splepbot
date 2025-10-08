@@ -20,7 +20,8 @@ initial_extensions = [
     "cogs.archive",
     "cogs.scan",
     "cogs.polls",
-    "cogs.config"
+    "cogs.config", 
+    "cogs.stats"
 ]
 
 # ============================
