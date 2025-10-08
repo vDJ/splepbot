@@ -79,8 +79,8 @@ class Polls(commands.Cog):
 #         Lancement d'un sondage avec un message archivé.
 #         :param timeout: durée du sondage en secondes (par défaut 30s).
 
-        if timeout < 15 or timeout > 600:
-            await interaction.response.send_message("⚠️ Le temps doit être entre 15 et 600 secondes.", ephemeral=True)
+        if timeout < 15 or timeout > 1800:
+            await interaction.response.send_message("⚠️ Le temps doit être entre 15 et 1800 secondes.", ephemeral=True)
             return
         
         # Connexion à la base
