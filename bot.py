@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 import asyncio
+import db
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -21,7 +22,8 @@ initial_extensions = [
     "cogs.scan",
     "cogs.polls",
     "cogs.config", 
-    "cogs.stats"
+    "cogs.stats",
+    "cogs.leaderboard"
 ]
 
 # ============================
@@ -40,6 +42,9 @@ async def on_ready():
 # ============================
 
 async def main():
+    #Initialisation de la base de données
+    db.init_db()
+
     # Charger les cogs avant de démarrer le bot
     for ext in initial_extensions:
         try:

@@ -4,7 +4,7 @@ from discord.ui import Button, View
 from discord import app_commands
 import random
 import sqlite3
-from db import DB_PATH
+from db import DB_PATH, add_points
 
 # ============================
 # VIEW POUR LE VOTE
@@ -44,6 +44,16 @@ class VotingView(View):
         # Résultats des votes
         results_text = "\n".join(f"**{choice}** : {count} vote(s)" for choice, count in self.votes.items())
         winners_ids = [uid for uid, vote in self.voted_users.items() if vote == self.true_author]
+
+        # Attribuer 1 point aux gagnants
+        for uid in winners_ids:
+            try:
+                add_points(uid, 1)  # 1 point par bonne réponse (ajustable)
+            except Exception as e:
+                # Evite de crasher si la DB a un souci ; on logge silencieusement
+                print(f"[polls] Impossible d'ajouter des points pour {uid}: {e}")
+
+        # Félicitations des gagnants
         winners_message = (
             "🎉 Félicitations aux bons devineurs : " + " ".join(f"<@{uid}>" for uid in winners_ids)
             if winners_ids else "Aucun bon vote cette fois, essayez encore !"
