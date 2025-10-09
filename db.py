@@ -71,7 +71,11 @@ def is_message_archived(message_id):
 def get_archived_message(message_id):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT content FROM archived_messages WHERE message_id = ?', (message_id,))
+    cursor.execute(
+        'SELECT message_id, content, author_name, message_url, image_url, reaction_emoji '
+        'FROM archived_messages WHERE message_id = ?',
+        (message_id,)
+    )    
     row = cursor.fetchone()
     conn.close()
     return row[0] if row else None
@@ -80,7 +84,10 @@ def get_archived_message(message_id):
 def get_random_archived_message():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT message_id, content FROM archived_messages ORDER BY RANDOM() LIMIT 1')
+    cursor.execute(
+        'SELECT message_id, content, author_name, message_url, image_url, reaction_emoji '
+        'FROM archived_messages ORDER BY RANDOM() LIMIT 1'
+    )   
     row = cursor.fetchone()
     conn.close()
     return row if row else None
