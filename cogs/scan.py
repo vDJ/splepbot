@@ -56,12 +56,12 @@ class Scan(commands.Cog):
                         total_archived += 1
                     update_last_scanned_id(channel.id, message.id)
 
-                await interaction.followup.send(f"✅ Fin du scan de {channel.mention}.", ephemeral=True)
+                await interaction.channel.send(f"✅ Fin du scan de {channel.mention}.")
 
             except discord.Forbidden:
-                await interaction.followup.send(f"⚠️ Pas d’accès à {channel.mention}, ignoré.", ephemeral=True)
+                await interaction.channel.send(f"⚠️ Pas d’accès à {channel.mention}, ignoré.")
 
-        await interaction.followup.send(f"🎉 Scan terminé. {total_archived} messages archivés au total.")
+        await interaction.channel.send(f"🎉 Scan terminé. {total_archived} messages archivés au total.")
 
     # ----------- /scan_full ------------
     @app_commands.command(
@@ -113,16 +113,15 @@ class Scan(commands.Cog):
                 if scanned % 1000 == 0:
                     await asyncio.sleep(3)
                 if scanned % 20000 == 0:
-                    await interaction.followup.send(
+                    await interaction.channel.send(
                         f"🔍 Scan en cours dans {channel.mention} : "
-                        f"{scanned} messages scannés, {total_archived} archivés.",
-                        ephemeral=True
+                        f"{scanned} messages scannés, {total_archived} archivés."
                     )
 
             if last_message:
                 update_last_scanned_id(channel.id, last_message.id)
 
-            await interaction.followup.send(
+            await interaction.channel.send(
                 f"✅ Scan terminé dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés."
             )
 
@@ -130,7 +129,7 @@ class Scan(commands.Cog):
             await interaction.followup.send("❌ Je n'ai pas accès à ce canal.", ephemeral=True)
         except Exception as e:
             print(f"[ERROR] Exception during scan_full: {e}")
-            await interaction.followup.send(f"⚠️ Erreur pendant le scan : {e}", ephemeral=True)
+            await interaction.channel.send(f"⚠️ Erreur pendant le scan : {e}")
 
 async def setup(bot):
     await bot.add_cog(Scan(bot))
