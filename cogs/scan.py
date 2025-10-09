@@ -75,7 +75,6 @@ class Scan(commands.Cog):
         scanned = 0
         empty_batches = 0
 
-        # 🔹 On reprend la progression si elle existe
         last_scanned_id = get_last_scanned_id(channel.id)
         last_message = discord.Object(id=last_scanned_id) if last_scanned_id else None
 
@@ -102,46 +101,15 @@ class Scan(commands.Cog):
 
                 for message in messages:
                     scanned += 1
-                    if message.author.bot:
-                        continue
-                    if is_message_archived(message.id):
-                        continue
-                    if not message.content or message.content.strip() == "":
-                        continue
-
-                    for reaction in message.reactions:
-                        if reaction.count >= getattr(self.bot, "reaction_threshold", 4):
-                            image_url = None
-                            if message.attachments:
-                                for attachment in message.attachments:
-                                    if attachment.content_type and attachment.content_type.startswith("image/"):
-                                        image_url = attachment.url
-                                        break
-
-                            message_url = f"https://discord.com/channels/{interaction.guild.id}/{channel.id}/{message.id}"
-
-                            try_archive_message(
-                                message.id,
-                                message.content,
-                                reaction.count,
-                                channel.id,
-                                interaction.guild.id,
-                                message.author.name,
-                                message_url,
-                                image_url,
-                                str(reaction.emoji)
-                            )
-                            print(f"[ARCHIVE] ✅ Message {message.id} archivé (auteur={message.author}, réactions={reaction.count})")
-                            total_archived += 1
-                            break
+                    if await try_archive_message(self.bot, message):
+                        total_archived += 1
+                        print(f"[ARCHIVE] ✅ Message {message.id} archivé (auteur={message.author})")
 
                     last_message = message
 
-                    # 🔹 Mise à jour régulière de la progression
                     if scanned % 500 == 0:
                         update_last_scanned_id(channel.id, last_message.id)
 
-                # pauses API
                 if scanned % 1000 == 0:
                     await asyncio.sleep(3)
                 if scanned % 20000 == 0:
@@ -151,7 +119,6 @@ class Scan(commands.Cog):
                         ephemeral=True
                     )
 
-            # 🔹 Sauvegarde finale
             if last_message:
                 update_last_scanned_id(channel.id, last_message.id)
 
