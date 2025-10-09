@@ -83,12 +83,31 @@ class Scan(commands.Cog):
 
                 for message in messages:
                     scanned += 1
-                    if await try_archive_message(self.bot, message):
-                        total_archived += 1
                     last_message = message
 
+                    try:
+                        if await try_archive_message(self.bot, message):
+                            total_archived += 1
+
+                    except sqlite3.OperationalError as e:
+                        # Cas typique : "database is locked"
+                        print(f"[SQLite LOCK] msg_id={message.id} | {e}")
+                        await asyncio.sleep(1)  # petite pause et on continue
+                        continue
+
+                    except Exception as e:
+                        # Toute autre erreur (Discord, logique, etc.)
+                        print(f"[ARCHIVE ERROR] msg_id={message.id} | {e}")
+                        continue
+
+                    if scanned % 1000 == 0:
+                        print(f"[DEBUG] {scanned} messages scannés, {total_archived} archivés (dernier={message.id})")
+
+                # Pause régulière pour respecter Discord
                 if scanned % 1000 == 0:
                     await asyncio.sleep(3)
+
+                # Feedback intermédiaire pour les très gros scans
                 if scanned % 20000 == 0:
                     await interaction.followup.send(
                         f"🔍 Scan en cours dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés.",
@@ -102,7 +121,8 @@ class Scan(commands.Cog):
         except discord.Forbidden:
             await interaction.followup.send("❌ Je n'ai pas accès à ce canal.", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(f"⚠️ Erreur pendant le scan : {e}", ephemeral=True)
+            await interaction.followup.send(f"⚠️ Erreur fatale pendant le scan : {e}", ephemeral=True)
+            print(f"[SCAN_FULL CRASH] {e}, après {scanned} messages")
 
 async def setup(bot):
     await bot.add_cog(Scan(bot))
