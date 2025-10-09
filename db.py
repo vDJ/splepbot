@@ -68,7 +68,7 @@ def is_message_archived(message_id):
     return result is not None
 
 # Récupère le contenu d'un message archivé par son ID
-def get_archived_message(message_id):
+def get_archived_message(message_id: int):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -78,7 +78,7 @@ def get_archived_message(message_id):
     )    
     row = cursor.fetchone()
     conn.close()
-    return row[0] if row else None
+    return row if row else None
 
 # Récupère un message aléatoire depuis la base
 def get_random_archived_message():

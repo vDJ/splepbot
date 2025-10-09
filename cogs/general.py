@@ -46,7 +46,14 @@ class General(commands.Cog):
         description="Affiche un message archivé à partir de son ID."
     )
     async def show_message_by_id(self, interaction: discord.Interaction, message_id: str):
-        row = get_archived_message(message_id)
+
+        try:
+            message_id_int = int(message_id)  # conversion en Python, pas en signature
+        except ValueError:
+            await interaction.response.send_message("⚠️ ID invalide, merci de fournir un nombre.", ephemeral=True)
+            return
+        
+        row = get_archived_message(message_id_int)
         if not row:
             await interaction.response.send_message("⚠️ Aucun message archivé avec cet ID.", ephemeral=True)
             return
