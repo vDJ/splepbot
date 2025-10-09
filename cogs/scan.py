@@ -120,7 +120,7 @@ class Scan(commands.Cog):
 
                             message_url = f"https://discord.com/channels/{interaction.guild.id}/{channel.id}/{message.id}"
 
-                            archive_message(
+                            try_archive_message(
                                 message.id,
                                 message.content,
                                 reaction.count,
