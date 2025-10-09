@@ -85,6 +85,15 @@ def get_random_archived_message():
     conn.close()
     return row if row else None
 
+# Récupère un message aléatoire rarement vu depuis la base
+def get_random_unseen_archived_message():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT message_id, content FROM archived_messages ORDER BY times_polled ASC, RANDOM() LIMIT 1')
+    row = cursor.fetchone()
+    conn.close()
+    return row if row else None
+
 # ============================
 # FONCTIONS POUR LE SCAN
 # ============================

@@ -99,7 +99,7 @@ class Polls(commands.Cog):
 
         cursor.execute(
             'SELECT message_id, content, author_name, message_url, image_url, reaction_emoji '
-            'FROM archived_messages' 
+            'FROM archived_messages ' 
             'ORDER BY times_polled ASC, RANDOM() LIMIT 1'
         )
         row = cursor.fetchone()
