@@ -40,12 +40,12 @@ class General(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
 
-    # ----------- /archived_by_id ------------
+    # ----------- /show_message_by_id ------------
     @app_commands.command(
-        name="archived_by_id",
+        name="show_message_by_id",
         description="Affiche un message archivé à partir de son ID."
     )
-    async def archived_by_id(self, interaction: discord.Interaction, message_id: int):
+    async def show_message_by_id(self, interaction: discord.Interaction, message_id: str):
         row = get_archived_message(message_id)
         if not row:
             await interaction.response.send_message("⚠️ Aucun message archivé avec cet ID.", ephemeral=True)
