@@ -2,7 +2,7 @@ from discord.ext import commands
 import discord
 from discord import app_commands
 import asyncio
-from db import update_last_scanned_id, get_last_scanned_id
+from db import update_last_scanned_id, get_last_scanned_id, is_message_archived
 from cogs.archive import try_archive_message  # On réutilise la fonction commune
 
 class Scan(commands.Cog):
@@ -73,46 +73,87 @@ class Scan(commands.Cog):
 
         total_archived = 0
         scanned = 0
-        last_message = None
+        empty_batches = 0
+
+        # 🔹 On reprend la progression si elle existe
+        last_scanned_id = get_last_scanned_id(channel.id)
+        last_message = discord.Object(id=last_scanned_id) if last_scanned_id else None
 
         try:
             while True:
                 messages = [m async for m in channel.history(limit=100, before=last_message)]
+
+                print(f"[DEBUG] Fetched {len(messages)} messages "
+                    f"(before={last_message.id if last_message else None}, "
+                    f"scanned={scanned}, archived={total_archived})")
+
                 if not messages:
-                    break
+                    empty_batches += 1
+                    print(f"[DEBUG] Batch vide #{empty_batches} (last_message={last_message.id if last_message else None})")
+
+                    if empty_batches >= 3:
+                        print("[DEBUG] 3 batchs vides consécutifs → fin du scan")
+                        break
+
+                    await asyncio.sleep(5)
+                    continue
+
+                empty_batches = 0
 
                 for message in messages:
                     scanned += 1
+                    if message.author.bot:
+                        continue
+                    if is_message_archived(message.id):
+                        continue
+                    if not message.content or message.content.strip() == "":
+                        continue
+
+                    for reaction in message.reactions:
+                        if reaction.count >= getattr(self.bot, "reaction_threshold", 4):
+                            image_url = None
+                            if message.attachments:
+                                for attachment in message.attachments:
+                                    if attachment.content_type and attachment.content_type.startswith("image/"):
+                                        image_url = attachment.url
+                                        break
+
+                            message_url = f"https://discord.com/channels/{interaction.guild.id}/{channel.id}/{message.id}"
+
+                            archive_message(
+                                message.id,
+                                message.content,
+                                reaction.count,
+                                channel.id,
+                                interaction.guild.id,
+                                message.author.name,
+                                message_url,
+                                image_url,
+                                str(reaction.emoji)
+                            )
+                            print(f"[ARCHIVE] ✅ Message {message.id} archivé (auteur={message.author}, réactions={reaction.count})")
+                            total_archived += 1
+                            break
+
                     last_message = message
 
-                    try:
-                        if await try_archive_message(self.bot, message):
-                            total_archived += 1
+                    # 🔹 Mise à jour régulière de la progression
+                    if scanned % 500 == 0:
+                        update_last_scanned_id(channel.id, last_message.id)
 
-                    except sqlite3.OperationalError as e:
-                        # Cas typique : "database is locked"
-                        print(f"[SQLite LOCK] msg_id={message.id} | {e}")
-                        await asyncio.sleep(1)  # petite pause et on continue
-                        continue
-
-                    except Exception as e:
-                        # Toute autre erreur (Discord, logique, etc.)
-                        print(f"[ARCHIVE ERROR] msg_id={message.id} | {e}")
-                        continue
-
-                    if scanned % 1000 == 0:
-                        print(f"[DEBUG] {scanned} messages scannés, {total_archived} archivés (dernier={message.id})")
-
-                # Pause régulière pour respecter Discord
+                # pauses API
                 if scanned % 1000 == 0:
                     await asyncio.sleep(3)
-
-                # Feedback intermédiaire pour les très gros scans
                 if scanned % 20000 == 0:
                     await interaction.followup.send(
-                        f"🔍 Scan en cours dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés.",
+                        f"🔍 Scan en cours dans {channel.mention} : "
+                        f"{scanned} messages scannés, {total_archived} archivés.",
                         ephemeral=True
                     )
+
+            # 🔹 Sauvegarde finale
+            if last_message:
+                update_last_scanned_id(channel.id, last_message.id)
 
             await interaction.followup.send(
                 f"✅ Scan terminé dans {channel.mention} : {scanned} messages scannés, {total_archived} archivés."
@@ -121,8 +162,8 @@ class Scan(commands.Cog):
         except discord.Forbidden:
             await interaction.followup.send("❌ Je n'ai pas accès à ce canal.", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(f"⚠️ Erreur fatale pendant le scan : {e}", ephemeral=True)
-            print(f"[SCAN_FULL CRASH] {e}, après {scanned} messages")
+            print(f"[ERROR] Exception during scan_full: {e}")
+            await interaction.followup.send(f"⚠️ Erreur pendant le scan : {e}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Scan(bot))
