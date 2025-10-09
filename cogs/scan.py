@@ -101,9 +101,12 @@ class Scan(commands.Cog):
 
                 for message in messages:
                     scanned += 1
-                    if await try_archive_message(self.bot, message):
-                        total_archived += 1
-                        print(f"[ARCHIVE] ✅ Message {message.id} archivé (auteur={message.author})")
+
+                    # Vérifie si une des réactions atteint le seuil
+                    if any(r.count >= getattr(self.bot, "reaction_threshold", 4) for r in message.reactions):
+                        if await try_archive_message(self.bot, message):
+                            total_archived += 1
+                            print(f"[ARCHIVE] ✅ Message {message.id} archivé (auteur={message.author})")
 
                     last_message = message
 

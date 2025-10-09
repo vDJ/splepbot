@@ -111,7 +111,7 @@ class Polls(commands.Cog):
         message_id, content, true_author, message_url, image_url, reaction_emoji = row
 
         cursor.execute(
-            'SELECT DISTINCT author_name FROM archived_messages WHERE author_name != ? ORDER BY RANDOM() LIMIT 2',
+            'SELECT DISTINCT author_name FROM archived_messages WHERE author_name != ? ORDER BY RANDOM() LIMIT 3',
             (true_author,)
         )
         other_authors = [r[0] for r in cursor.fetchall()]

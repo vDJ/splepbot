@@ -9,11 +9,13 @@ from db import archive_message, is_message_archived, get_archived_message, DB_PA
 # ============================
 async def try_archive_message(bot, target_message: discord.Message) -> bool:
     """Tente d’archiver un message. Retourne True si succès, False sinon."""
+
     if target_message.author.bot:
         return False
     if is_message_archived(target_message.id):
         return False
-    if not target_message.content or target_message.content.strip() == "":
+    if not target_message.content and not target_message.attachments:
+        # ni texte ni image
         return False
 
     # Gérer l'image éventuelle
@@ -28,13 +30,9 @@ async def try_archive_message(bot, target_message: discord.Message) -> bool:
     max_reactions = max([r.count for r in target_message.reactions], default=0)
     reaction_emoji = str(target_message.reactions[0].emoji) if target_message.reactions else None
 
-    # Vérifier le seuil minimal
-    if max_reactions < getattr(bot, "reaction_threshold", 4):
-        return False
-
     archive_message(
         target_message.id,
-        target_message.content,
+        target_message.content or "",
         max_reactions,
         target_message.channel.id,
         target_message.guild.id,
@@ -44,7 +42,6 @@ async def try_archive_message(bot, target_message: discord.Message) -> bool:
         reaction_emoji
     )
 
-    # --- LOG CONSOLE ---
     print(f"[ARCHIVE] ✅ Message {target_message.id} archivé "
           f"(auteur={target_message.author}, réactions={max_reactions}, canal={target_message.channel})")
 
@@ -129,6 +126,9 @@ class Archive(commands.Cog):
     async def on_reaction_add(self, reaction, user):
         if user.bot:
             return
+
+        if reaction.count >= getattr(self.bot, "reaction_threshold", 4):
+            await try_archive_message(self.bot, reaction.message)
 
         message = reaction.message
         if message.author.bot:
