@@ -20,7 +20,7 @@ class VotingView(View):
         self.message_url = message_url
         self.image_url = image_url
         self.reaction_emoji = reaction_emoji
-        self.message = None  # sera assigné après l’envoi du message
+        self.message: discord.Message | None = None  # sera assigné après l’envoi du message
 
         for choice in choices:
             button = Button(label=choice, style=discord.ButtonStyle.primary)
@@ -45,13 +45,19 @@ class VotingView(View):
         results_text = "\n".join(f"**{choice}** : {count} vote(s)" for choice, count in self.votes.items())
         winners_ids = [uid for uid, vote in self.voted_users.items() if vote == self.true_author]
 
-        # Attribuer 1 point aux gagnants
-        for uid in winners_ids:
-            try:
-                add_points(uid, 1)  # 1 point par bonne réponse (ajustable)
-            except Exception as e:
-                # Evite de crasher si la DB a un souci ; on logge silencieusement
-                print(f"[polls] Impossible d'ajouter des points pour {uid}: {e}")
+        total_votes = len(self.voted_users)
+
+        # Attribuer 1 point aux gagnants si plus de 2 votes
+        if total_votes >= 2 and winners_ids:
+            for uid in winners_ids:
+                try:
+                    add_points(uid, 1)  # 1 point par bonne réponse (ajustable)
+                except Exception as e:
+                    # Evite de crasher si la DB a un souci ; on logge silencieusement
+                    print(f"[polls] Impossible d'ajouter des points pour {uid}: {e}")
+        else:
+            winners_message = "⚠️ Pas de points attribués (il faut au moins 2 participants)."
+
 
         # Félicitations des gagnants
         winners_message = (
@@ -71,7 +77,7 @@ class VotingView(View):
             f"{winners_message}"
         )
 
-        await self.message.edit(content=final_msg, view=self)
+        await self.message.edit(content=final_msg, embed=None,view=self)
 
 # ============================
 # COMMANDE POUR LES POLLS
@@ -142,13 +148,19 @@ class Polls(commands.Cog):
         if reaction_emoji:
             embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
 
-        # Déclarer la view
-        voting_view = VotingView(choices, true_author, message_url, image_url= image_url, reaction_emoji=reaction_emoji, timeout=timeout)
+        voting_view = VotingView(choices, true_author, message_url, image_url=image_url, reaction_emoji=reaction_emoji, timeout=timeout)
 
-        # Déférer la réponse et envoyer le message
-        await interaction.response.defer()
-        message = await interaction.channel.send(embed=embed, view=voting_view)
-        voting_view.message = message
+        # Déférer pour éviter le timeout, puis supprimer la réponse initiale
+        await interaction.response.defer(ephemeral=True)
+
+        poll_message = await interaction.channel.send(embed=embed, view=voting_view)
+        voting_view.message = poll_message
+
+        # Supprimer le "Splepbot is thinking..."
+        try:
+            await interaction.delete_original_response()
+        except:
+            pass
 
 # ============================
 # SETUP DU COG
