@@ -147,7 +147,7 @@ class Polls(commands.Cog):
 
         # Déférer la réponse et envoyer le message
         await interaction.response.defer()
-        message = await interaction.followup.send(embed=embed, view=voting_view)
+        message = await interaction.channel.send(embed=embed, view=voting_view)
         voting_view.message = message
 
 # ============================
