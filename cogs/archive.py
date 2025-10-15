@@ -127,15 +127,19 @@ class Archive(commands.Cog):
         if user.bot:
             return
 
-        if reaction.count >= getattr(self.bot, "reaction_threshold", 4):
-            await try_archive_message(self.bot, reaction.message)
-            await reaction.message.channel.send(f"💾 Message archivé (seuil atteint) : {reaction.message.content[:50]}...")
-
         message = reaction.message
         if message.author.bot:
             return
         if not message.content or message.content.strip() == "":
             return
+        
+        # Si le message atteint le seuil défini
+        if reaction.count >= getattr(self.bot, "reaction_threshold", 4):
+            archived = await try_archive_message(self.bot, message)
+            if archived:
+                await message.channel.send(
+                    f"💾 Message archivé (seuil atteint) : {message.content[:50]}..."
+            )
 
 
 async def setup(bot):
