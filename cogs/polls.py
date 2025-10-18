@@ -133,13 +133,9 @@ class Polls(commands.Cog):
         content_anonymized = content[:1000] + ("..." if len(content) > 1000 else "")
 
         # Si c’est un tweet → on affiche le lien AVANT le sondage
-        tweet_message = None
         if content and ("twitter.com" in content or "x.com" in content):
             # Déférer d’abord pour éviter le timeout
-            await interaction.response.defer(ephemeral=True)
-            tweet_message = await interaction.channel.send(content)
-        else:
-            await interaction.response.defer(ephemeral=True)
+            await interaction.response.send_message(content)
 
         # Sinon embed normal
         embed = discord.Embed(
