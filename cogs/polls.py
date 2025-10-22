@@ -11,8 +11,8 @@ from db import DB_PATH, add_points
 # ============================
 
 class VotingView(View):
-    def __init__(self, choices, true_author, message_url, image_url=None, reaction_emoji=None, timeout=30):
-        super().__init__(timeout=timeout) #timeout personnalisable, défaut 30s
+    def __init__(self, choices, true_author, message_url, content, image_url=None, reaction_emoji=None, timeout=30):
+        super().__init__(timeout=timeout)  # timeout personnalisable, défaut 30s
         self.timeout_value = timeout
         self.votes = {choice: 0 for choice in choices}
         self.voted_users = {}  # user_id -> choix
@@ -20,7 +20,8 @@ class VotingView(View):
         self.message_url = message_url
         self.image_url = image_url
         self.reaction_emoji = reaction_emoji
-        self.message: discord.Message | None = None  # sera assigné après l’envoi du message
+        self.message: discord.Message | None = None
+        self.content_preview = content[:1000] + ("..." if len(content) > 1000 else "")
 
         for choice in choices:
             button = Button(label=choice, style=discord.ButtonStyle.primary)
@@ -47,19 +48,19 @@ class VotingView(View):
 
         total_votes = len(self.voted_users)
 
-        # Attribuer 1 point aux gagnants si plus de 2 votes
+        # Attribution des points
         if total_votes >= 2 and winners_ids:
             for uid in winners_ids:
                 try:
-                    add_points(uid, 1)  # 1 point par bonne réponse (ajustable)
+                    add_points(uid, 1)
                 except Exception as e:
-                    # Evite de crasher si la DB a un souci ; on logge silencieusement
+																					 
                     print(f"[polls] Impossible d'ajouter des points pour {uid}: {e}")
-        else:
-            winners_message = "⚠️ Pas de points attribués (il faut au moins 2 participants)."
+			 
+																								  
 
 
-        # Félicitations des gagnants
+        # Félicitations
         winners_message = (
             "🎉 Félicitations aux bons devineurs : " + " ".join(f"<@{uid}>" for uid in winners_ids)
             if winners_ids else "Aucun bon vote cette fois, essayez encore !"
@@ -71,13 +72,15 @@ class VotingView(View):
 
         # Message final
         final_msg = (
-            f"📊 Résultats du sondage (⏳ {self.timeout_value}s) :\n{results_text}\n\n"
+            "📊 **Résultats du sondage**\n\n"
+            f"💬 **Message à deviner :**\n> {self.content_preview}\n\n"
+            f"{results_text}\n\n"
             f"✅ La bonne réponse était : **{self.true_author}**\n"
             f"🔗 [Lien vers le message original]({self.message_url})\n\n"
             f"{winners_message}"
         )
 
-        await self.message.edit(content=final_msg, embed=None,view=self)
+        await self.message.edit(content=final_msg, embed=None, view=self)
 
 # ============================
 # COMMANDE POUR LES POLLS
@@ -91,21 +94,21 @@ class Polls(commands.Cog):
         name="random_message_poll",
         description="Affiche un message archivé anonymisé avec vote pour l’auteur."
     )
-    async def random_message_poll(self, interaction: discord.Interaction, timeout : int = 30):
-#         Lancement d'un sondage avec un message archivé.
-#         :param timeout: durée du sondage en secondes (par défaut 30s).
+    async def random_message_poll(self, interaction: discord.Interaction, timeout: int = 30):
+														  
+																		  
 
         if timeout < 15 or timeout > 1800:
             await interaction.response.send_message("⚠️ Le temps doit être entre 15 et 1800 secondes.", ephemeral=True)
             return
-        
+
         # Connexion à la base
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
             'SELECT message_id, content, author_name, message_url, image_url, reaction_emoji '
-            'FROM archived_messages ' 
+            'FROM archived_messages '
             'ORDER BY times_polled ASC, RANDOM() LIMIT 1'
         )
         row = cursor.fetchone()
@@ -113,7 +116,7 @@ class Polls(commands.Cog):
             await interaction.response.send_message("⚠️ Aucun message archivé pour le moment.")
             conn.close()
             return
-        
+
         message_id, content, true_author, message_url, image_url, reaction_emoji = row
 
         cursor.execute(
@@ -122,7 +125,7 @@ class Polls(commands.Cog):
         )
         other_authors = [r[0] for r in cursor.fetchall()]
 
-        # incrémenter le compteur
+        # Incrémenter le compteur
         cursor.execute("UPDATE archived_messages SET times_polled = times_polled + 1 WHERE message_id = ?", (message_id,))
         conn.commit()
 
@@ -132,15 +135,20 @@ class Polls(commands.Cog):
         random.shuffle(choices)
         content_anonymized = content[:1000] + ("..." if len(content) > 1000 else "")
 
-        # Si c’est un tweet → on affiche le lien AVANT le sondage
-        if content and ("twitter.com" in content or "x.com" in content):
-            # Déférer d’abord pour éviter le timeout
-            await interaction.response.send_message(content)
+        # Phrase pour le timeout (affichée seulement si ≠ 30s)
+        timeout_text = f"\n⏱️ Temps pour voter : {timeout}s" if timeout != 30 else ""
 
-        # Sinon embed normal
+        # Si c’est un tweet → on affiche le lien avant le sondage
+        if content and ("twitter.com" in content or "x.com" in content):
+														 
+            await interaction.response.send_message(content)
+        else:
+            await interaction.response.defer(ephemeral=True)
+
+        # Embed du sondage
         embed = discord.Embed(
             title="📄 Devine l’auteur du message anonymisé",
-            description=content_anonymized,
+            description=content_anonymized + timeout_text,
             color=discord.Color.orange()
         )
         if image_url:
@@ -148,10 +156,13 @@ class Polls(commands.Cog):
         if reaction_emoji:
             embed.add_field(name="Réaction", value=reaction_emoji, inline=True)
 
-        voting_view = VotingView(choices, true_author, message_url, image_url=image_url, reaction_emoji=reaction_emoji, timeout=timeout)
+        voting_view = VotingView(
+            choices, true_author, message_url, content,
+            image_url=image_url, reaction_emoji=reaction_emoji, timeout=timeout
+        )
 
-        # Déférer pour éviter le timeout, puis supprimer la réponse initiale
-        await interaction.response.defer(ephemeral=True)
+																				
+														
 
         poll_message = await interaction.channel.send(embed=embed, view=voting_view)
         voting_view.message = poll_message
