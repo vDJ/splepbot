@@ -23,7 +23,8 @@ initial_extensions = [
     "cogs.polls",
     "cogs.config", 
     "cogs.stats",
-    "cogs.leaderboard"
+    "cogs.leaderboard",
+    "cogs.self_react_alert"
 ]
 
 # ============================
